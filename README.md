@@ -1,9 +1,6 @@
 # Implementation sketch for Bazel-managed Postgres
 
-This is a sketch of how to build and run Postgres on Bazel for Linux x64. As a
-sketch, it's not an end-to-end solution; you'll need to glue it together for 
-your specific environment. For Darwin, I downloaded the prebuilt Homebrew
-binaries instead of building.
+This is a working solution to build and run Postgres on Bazel for Linux x64.
 
 We compile the Postgres source into a mostly statically-linked Linux binary.
 Postgres is quite difficult to compile completely statically, so we bundle all

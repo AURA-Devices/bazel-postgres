@@ -1,52 +1,19 @@
 diff --git a/src/backend/main/main.c b/src/backend/main/main.c
-index e58e24a646..1748e87cc1 100644
---- a/src/backend/main/main.c
-+++ b/src/backend/main/main.c
-@@ -366,39 +366,4 @@ help(const char *progname)
- static void
- check_root(const char *progname)
+--- a/src/backend/main/main.c	1970-01-01 00:00:00.000000000 +0000
++++ b/src/backend/main/main.c	1970-01-01 00:00:00.000000000 +0000
+@@ -58,7 +58,7 @@ static void check_root(const char *progname);
+ int
+ main(int argc, char *argv[])
  {
--#ifndef WIN32
--	if (geteuid() == 0)
--	{
--		write_stderr("\"root\" execution of the PostgreSQL server is not permitted.\n"
--					 "The server must be started under an unprivileged user ID to prevent\n"
--					 "possible system security compromise.  See the documentation for\n"
--					 "more information on how to properly start the server.\n");
--		exit(1);
--	}
--
--	/*
--	 * Also make sure that real and effective uids are the same. Executing as
--	 * a setuid program from a root shell is a security hole, since on many
--	 * platforms a nefarious subroutine could setuid back to root if real uid
--	 * is root.  (Since nobody actually uses postgres as a setuid program,
--	 * trying to actively fix this situation seems more trouble than it's
--	 * worth; we'll just expend the effort to check for it.)
--	 */
--	if (getuid() != geteuid())
--	{
--		write_stderr("%s: real and effective user IDs must match\n",
--					 progname);
--		exit(1);
--	}
--#else							/* WIN32 */
--	if (pgwin32_is_admin())
--	{
--		write_stderr("Execution of PostgreSQL by a user with administrative permissions is not\n"
--					 "permitted.\n"
--					 "The server must be started under an unprivileged user ID to prevent\n"
--					 "possible system security compromises.  See the documentation for\n"
--					 "more information on how to properly start the server.\n");
--		exit(1);
--	}
--#endif							/* WIN32 */
- }
+-	bool		do_check_root = true;
++	bool		do_check_root = false;
+ 
+ 	reached_main = true;
+ 
 diff --git a/src/bin/initdb/initdb.c b/src/bin/initdb/initdb.c
-index 0945d70061..fb3151d17f 100644
---- a/src/bin/initdb/initdb.c
-+++ b/src/bin/initdb/initdb.c
-@@ -603,17 +603,6 @@ get_id(void)
+--- a/src/bin/initdb/initdb.c	1970-01-01 00:00:00.000000000 +0000
++++ b/src/bin/initdb/initdb.c	1970-01-01 00:00:00.000000000 +0000
+@@ -809,15 +809,6 @@ get_id(void)
  {
  	const char *username;
  
@@ -54,9 +21,7 @@ index 0945d70061..fb3151d17f 100644
 -	if (geteuid() == 0)			/* 0 is root's uid */
 -	{
 -		pg_log_error("cannot be run as root");
--		fprintf(stderr,
--				_("Please log in (using, e.g., \"su\") as the (unprivileged) user that will\n"
--				  "own the server process.\n"));
+-		pg_log_error_hint("Please log in (using, e.g., \"su\") as the (unprivileged) user that will own the server process.");
 -		exit(1);
 -	}
 -#endif
@@ -64,3 +29,80 @@ index 0945d70061..fb3151d17f 100644
  	username = get_user_name_or_exit(progname);
  
  	return pg_strdup(username);
+diff --git a/src/bin/pg_ctl/pg_ctl.c b/src/bin/pg_ctl/pg_ctl.c
+--- a/src/bin/pg_ctl/pg_ctl.c	1970-01-01 00:00:00.000000000 +0000
++++ b/src/bin/pg_ctl/pg_ctl.c	1970-01-01 00:00:00.000000000 +0000
+@@ -2241,21 +2241,6 @@ main(int argc, char **argv)
+ 		}
+ 	}
+ 
+-	/*
+-	 * Disallow running as root, to forestall any possible security holes.
+-	 */
+-#ifndef WIN32
+-	if (geteuid() == 0)
+-	{
+-		write_stderr(_("%s: cannot be run as root\n"
+-					   "Please log in (using, e.g., \"su\") as the "
+-					   "(unprivileged) user that will\n"
+-					   "own the server process.\n"),
+-					 progname);
+-		exit(1);
+-	}
+-#endif
+-
+ 	env_wait = getenv("PGCTLTIMEOUT");
+ 	if (env_wait != NULL)
+ 		wait_seconds = atoi(env_wait);
+diff --git a/src/bin/pg_resetwal/pg_resetwal.c b/src/bin/pg_resetwal/pg_resetwal.c
+--- a/src/bin/pg_resetwal/pg_resetwal.c	1970-01-01 00:00:00.000000000 +0000
++++ b/src/bin/pg_resetwal/pg_resetwal.c	1970-01-01 00:00:00.000000000 +0000
+@@ -324,22 +324,6 @@ main(int argc, char *argv[])
+ 		exit(1);
+ 	}
+ 
+-	/*
+-	 * Don't allow pg_resetwal to be run as root, to avoid overwriting the
+-	 * ownership of files in the data directory. We need only check for root
+-	 * -- any other user won't have sufficient permissions to modify files in
+-	 * the data directory.
+-	 */
+-#ifndef WIN32
+-	if (geteuid() == 0)
+-	{
+-		pg_log_error("cannot be executed by \"root\"");
+-		pg_log_error_hint("You must run %s as the PostgreSQL superuser.",
+-						  progname);
+-		exit(1);
+-	}
+-#endif
+-
+ 	get_restricted_token();
+ 
+ 	/* Set mask based on PGDATA permissions */
+diff --git a/src/bin/pg_rewind/pg_rewind.c b/src/bin/pg_rewind/pg_rewind.c
+--- a/src/bin/pg_rewind/pg_rewind.c	1970-01-01 00:00:00.000000000 +0000
++++ b/src/bin/pg_rewind/pg_rewind.c	1970-01-01 00:00:00.000000000 +0000
+@@ -261,22 +261,6 @@ main(int argc, char **argv)
+ 		exit(1);
+ 	}
+ 
+-	/*
+-	 * Don't allow pg_rewind to be run as root, to avoid overwriting the
+-	 * ownership of files in the data directory. We need only check for root
+-	 * -- any other user won't have sufficient permissions to modify files in
+-	 * the data directory.
+-	 */
+-#ifndef WIN32
+-	if (geteuid() == 0)
+-	{
+-		pg_log_error("cannot be executed by \"root\"");
+-		pg_log_error_hint("You must run %s as the PostgreSQL superuser.",
+-						  progname);
+-		exit(1);
+-	}
+-#endif
+-
+ 	get_restricted_token();
+ 
+ 	/* Set mask based on PGDATA permissions */

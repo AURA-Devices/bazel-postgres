@@ -8,31 +8,30 @@
 #
 # Flags
 #
-# --debug  drop into a bash shell in the build container and test container;
-#          skips uploading image to GCP storage. To continue after dropping
+# --debug  drop into a bash shell in the build container and test container.
+#          To continue after dropping
 #          into bash, use 'exit'. You'll need to do it twice.
-# --test   skip uploading and only runs tests
+# --nobuild   skip building and only run tests
 
 set -euo pipefail
+
+
+postgre_version='17.4'
+test_binaries_archive="postgresql-v${postgre_version}.linux-amd64.tar.gz"
 
 script_dir="$(
   cd "$(dirname "$0")"
   pwd -P
 )"
 
-should_debug='no'
 debug_cmd='true'
 if [[ "$*" == *--debug* ]]; then
-  should_debug='yes'
   # If run with --debug, drop into a bash shell after building.
   debug_cmd='bash'
 fi
 
-should_test='no'
-if [[ "$*" == *--test* ]]; then
-  should_test='yes'
-fi
 
+if [[ "$*" != *--nobuild* ]]; then
 echo "
 Building Postgres
 =================
@@ -46,56 +45,22 @@ docker run -it --rm \
   --mount "type=bind,src=$script_dir/test,dst=/work/dist" \
   --workdir='/work/out' \
   third_party_postgres \
-  sh -c "$debug_cmd && mv -f /work/postgres-linux-amd64-files.tar.gz /work/dist/"
+  sh -c "$debug_cmd && mv -f /work/${test_binaries_archive} /work/dist/"
+else
+echo "--nobuild specified, skipping building Postgres"
+fi
 
 echo "
 Running tests
 =============
 "
 # Use buildx to always build for Linux amd64.
-docker buildx build -t third_party_postgres_test --platform=linux/amd64 "$script_dir/test"
+docker buildx build -t third_party_postgres_test -f test.dockerfile --platform=linux/amd64 "$script_dir"
 docker run -it --rm \
   --platform=linux/amd64 \
   --env LD_LIBRARY_PATH=/work/lib \
   third_party_postgres_test \
-  sh -c "$debug_cmd && /work/bin/initdb /pgdata"
-
-if [[ $should_debug == 'yes' ]]; then
-  echo
-  echo 'Skipping upload because of --debug flag'
-  exit 0
-fi
-
-if [[ $should_test == 'yes' ]]; then
-  echo
-  echo 'Skipping upload because of --test flag'
-  exit 0
-fi
-
-echo "
-Uploading archive
-=================
-"
-archive="$script_dir/test/postgres-linux-amd64-files.tar.gz"
-sha256="$(shasum -a 256 < "$archive" | awk '{ print $1 }')"
-short_sha="$(echo "$sha256" | cut -c 1-8)"
-postgres_tar="$script_dir/test/postgres13.3_linux_am64_files.$short_sha.tar.gz"
-mv -f "$archive" "$postgres_tar"
-dest_file="TODO_REPLACE_ME/postgres/$(basename "$postgres_tar")"
-gsutil cp "$postgres_tar" "gs://$dest_file"
-
-echo "
-Printing Bazel repo rule
-========================
-
-Update //third_party/postgres/repo.bzl with:
-
-    http_archive(
-        name = \"postgres_linux_amd64_files\",
-        build_file_content = all_files,
-        urls = [
-            \"https://storage.googleapis.com/$dest_file\",
-        ],
-        sha256 = \"$sha256\",
-    )
-"
+  sh -c "$debug_cmd && /work/bin/initdb /pgdata \
+  && /work/bin/pg_ctl -D /pgdata -l logfile start \
+  && /work/bin/createdb testdb \
+  && /work/bin/dropdb testdb"
