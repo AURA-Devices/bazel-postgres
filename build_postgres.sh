@@ -16,7 +16,7 @@
 set -euo pipefail
 
 
-postgre_version='17.4'
+postgre_version='17.5'
 test_binaries_archive="postgresql-v${postgre_version}.linux-amd64.tar.gz"
 
 script_dir="$(

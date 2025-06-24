@@ -4,7 +4,7 @@
 # is set.
 FROM ubuntu:20.04
 
-ARG POSTGRE_VERSION='17.4'
+ARG POSTGRE_VERSION='17.5'
 ARG DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update \
